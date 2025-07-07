@@ -1,0 +1,1 @@
+module github.com/ivnku/model-fields-prefixer
