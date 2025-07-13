@@ -11,7 +11,6 @@ import (
 const prefixedColumnsPlaceholder = "{columns}"
 
 type ModelFieldsPrefixer struct {
-	//strBuilder      *strings.Builder
 	bytesBuffer     *bytes.Buffer
 	cache           *ModelsInfoCache
 	excludeScanning map[string]struct{}
@@ -75,8 +74,15 @@ func (mp *ModelFieldsPrefixer) CustomColumns(custom string) *ModelFieldsPrefixer
 	return mp
 }
 
-func (mp *ModelFieldsPrefixer) Columns(model any, dbTableAlias string, joinModels ...M) *ModelFieldsPrefixer {
+func (mp *ModelFieldsPrefixer) Columns(args ...any) *ModelFieldsPrefixer {
 	mp.bytesBuffer.Reset()
+
+	if len(args) < 2 {
+		return mp
+	}
+
+	model := args[0]
+	dbTableAlias := args[1].(string)
 
 	t := reflect.TypeOf(model)
 
@@ -107,8 +113,8 @@ func (mp *ModelFieldsPrefixer) Columns(model any, dbTableAlias string, joinModel
 
 	// build string here
 	var joinModelsMap map[string]M
-	if len(joinModels) > 0 {
-		joinModelsMap = mp.getJoinModelsMap(joinModels...)
+	if len(args) > 2 && (len(args[2:])%2 == 0) {
+		joinModelsMap = mp.getJoinModelsMap(args[2:]...)
 	}
 
 	mp.buildString(modelInfo, joinModelsMap)
@@ -169,10 +175,15 @@ func (mp *ModelFieldsPrefixer) buildString(model *ModelInfo, joinModelsMap map[s
 	}
 }
 
-func (mp *ModelFieldsPrefixer) getJoinModelsMap(joinModels ...M) map[string]M {
+func (mp *ModelFieldsPrefixer) getJoinModelsMap(args ...any) map[string]M {
 	joinModelsMap := make(map[string]M)
 
-	for _, model := range joinModels {
+	for i := 0; i < len(args); i += 2 {
+		model := M{
+			N: reflect.TypeOf(args[i]).Name(),
+			A: args[i+1].(string),
+		}
+
 		if model.N == "" {
 			continue
 		}
@@ -320,16 +331,12 @@ func (mp *ModelFieldsPrefixer) collectCache(t reflect.Type, modelInfo *ModelInfo
 	return modelInfo, isAnyDBTag
 }
 
-func (mp *ModelFieldsPrefixer) WithinQuery(query string) string {
+func (mp *ModelFieldsPrefixer) InQuery(query string) string {
 	if mp.bytesBuffer == nil {
 		return ""
 	}
 
-	strings.ReplaceAll(query, prefixedColumnsPlaceholder, mp.bytesBuffer.String())
-
-	mp.bytesBuffer.Reset()
-
-	return mp.bytesBuffer.String()
+	return strings.ReplaceAll(query, prefixedColumnsPlaceholder, mp.String())
 }
 
 func (mp *ModelFieldsPrefixer) String() string {
